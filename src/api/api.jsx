@@ -1,10 +1,8 @@
 
 
 const firebaseConfig = {
-    apiKey: "AIzaSyAMu9AQIeRQZMVTKbxfoc1zqeeTfzQeWfU",
-    authDomain: "shop-ch-3c193.firebaseapp.com",
-    projectId: "shop-ch-3c193",
-    storageBucket: "shop-ch-3c193.appspot.com",
-    messagingSenderId: "162184911610",
-    appId: "1:162184911610:web:102d13f027934c10a10743"
+    apiKey: NEXT_PUBLIC_FIREBASE_API_KEY,
+    authDomain: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    projectId: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    
   };
