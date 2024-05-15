@@ -1,6 +1,6 @@
 "use client"
 
-import CartItem from "@/components/cartItem";
+import CartItem from "@/components/CartItem";
 import useCart from "@/service/useCart";
 import styled from "styled-components";
 
