@@ -1,13 +1,18 @@
 "use client"
 
-import { uploadImgs } from "@/api/api";
+import { addProducts, uploadImgs } from "@/api/api";
 import { CategoryContext } from "@/utils/categoryContext";
-import { useContext, useState } from "react";
+import { useContext, useRef, useState } from "react";
 import styled from "styled-components";
 
 
 export default function UploadPage(){
     const [file, setFile] = useState(null)
+    const [isLoading, setIsLoading] = useState(false);
+    const [success, setSuccess] = useState(null);
+    const [error, setError] = useState(null);
+    const fileRef = useRef();//파일에 있는 값을 비울때에는 ref로 돔을 직접적으로 조작해야 함
+
     const {categoryList} = useContext(CategoryContext);
     /*
     데이터 베이스 이용시 주의 사항
@@ -71,9 +76,31 @@ export default function UploadPage(){
         e.preventDefault();
         try{
             const url = await uploadImgs(file)
-            console.log(url)
+            await addProducts(product, url)
+            setSuccess('업로드가 완료되었습니다.')
+            setTimeout(()=>{
+                setSuccess(null)
+            },2000)
+            setFile(null);
+            setProduct({                
+                title : '',
+                price : '',
+                option : '',
+                category : '',
+                colors : [],
+            })
+
+            if(fileRef.current){
+                fileRef.current.value = '';
+            }
+
         }catch(error){
             console.error(error)
+            setError('업로드에 실패했습니다.')
+        }finally{
+            setIsLoading(false);
+            // finally는 try와 catch와 관계없이 try와 catch가 실행되고 무조건적으로 실행되는 블록
+            //  
         }
         
     }
@@ -146,7 +173,11 @@ export default function UploadPage(){
                 </ColorSelect>
 
                 {/* 업로드버튼 */}
-                <button className="resultBtn">업로드</button>
+                <button className="resultBtn" disabled={isLoading}>
+                    {isLoading ? '업로드중' : '제품등록하기'}
+                    </button>
+                    {success && ( <p>{success}</p>)}
+                    {error && ( <p>{error}</p>)}
                 
             </form>
         </UploadContainer>

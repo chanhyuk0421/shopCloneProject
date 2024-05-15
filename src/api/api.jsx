@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app'
-import { GoogleAuthProvider, getAuth, onAuthStateChanged, signInWithPopup } from 'firebase/auth'
-import { getDatabase} from 'firebase/database'
+import { GoogleAuthProvider, getAuth, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth'
+import { getDatabase, ref as databaseRef, set, get, query, orderByChild, equalTo, remove } from 'firebase/database'
 import { getDownloadURL, getStorage, ref as storageRef, uploadBytes } from 'firebase/storage';
 import { adminUser } from '@/service/admin';
 import { v4 as uuid } from 'uuid'
@@ -25,18 +25,18 @@ const storage = getStorage();
 
 // 구글 자동 로그인 방지
 provider.setCustomParameters({
-  // setCustomParameters : 인증 요청에 대한 사용자 정의 파라메터값을 설정
-  prompt : 'select_accout'
+  // setCustomParameters : 인증 요청에 대한 사용자 정의 파라미터값을 설정
+  prompt : 'select_account'
 })
 
 // 구글 로그인
 export async function googleLogin(){
   try{
-    const result = await signInWithPopup(auth,provider)
+    const result = await signInWithPopup(auth, provider);
     // signInWithPopup :  firebase 자체에 있는 인증 객체 provider를 인자를 받아서 google계정을 연동해서 로그인할 수 있게 하는 매서드
     const user = result.user;
     console.log(user)
-    return user
+    return user;
 
   }catch(error){
     console.error(error)
@@ -88,4 +88,155 @@ export async function uploadImgs(file) {
   }
 }
 
-export {database}
+// 이미지 링크와 함께 상품을 데이터베이스에 등록
+export async function addProducts(product,imgUrl){
+  try{
+    const id = uuid();
+    await set(databaseRef(database, `products/${id}`),{
+      ...product,
+      id,
+      image : imgUrl,
+      price : parseInt(product.price)
+    })
+  }catch(error){
+    console.error(error);
+  }
+} 
+
+//데이터베이스에 등록된 상품 리스트를 가져오기
+
+export async function getProducts(){
+   
+  try{
+    const snapshot = await get(databaseRef(database, 'products'));
+    if(snapshot.exists()){
+      return Object.values(snapshot.val())
+    }else{
+      return []
+    }
+  }catch(error){
+    console.error(error) 
+    return []
+  }
+ }
+
+// 카테고리별로 아이템을 구분해서 출력 클라이언트 필터링 ver
+// 데이터의 양이 작을때에는 상관 없지만 데이터의 양이 많을 경우에는 클라이언트 필터링이 불리해지는 부분이 생김
+/*
+모든 데이터를 클라이언트로 전송하는 로직이기 때문에 클라이언트 자체의 메모리를 사용하기 때문에 로딩이나 메모리 처리의
+과부하의 문제가 생김
+데이터의 전송량 문제 : 데이터가 클수록 네트워크 데이터 사용량이 증가
+
+서버측 필터링으로 대체
+-api 서버 자체에서 필터링을 거친 후 결과값만 클라이언트 전송되기 때문에 데이터의 속도나 사용량에 차이가 많이 생김
+
+데이터 양이 클수록 클라이언트 필터링보다는 서버 필터링을 추천
+*/  
+//  export async function getCategoryProduct(catagory){
+//     try{
+//       return get(databaseRef(database,'products')) .then((snapshot)=>{
+//         if(snapshot.exists()){
+//           const allProduct = Object.values(snapshot.val());
+//           const filterProduct = allProduct.filter((product)=>product.catagory === catagory);
+//           return filterProduct
+//         }else{
+//           return []
+//         }
+//       })
+//     }catch(error){
+//       console.error(error)
+//     }
+//  }
+
+// 서버 필터링 ver
+
+export async function getCategoryProduct(category){
+  try{
+    const productRef = databaseRef(database, 'products');
+    
+    // category를 기준으로 쿼리를 생성하고 주어진 값이 전송받은 category와 같은 값만 조회
+    const q = query(productRef, orderByChild('category'), equalTo(category))
+    // console.log(q)
+
+    const snapshot = await get(q);
+    if(snapshot.exists()){
+      return Object.values(snapshot.val());
+    }else{
+      return [];
+    }
+  
+  }catch(error){
+    console.error(error)
+    return []
+  }
+}
+
+// 디테일 페이지에서 전달받은 제품 id를 이용해서 database에 있는 동일한 id의 제품과 매칭
+export async function getProductId(productId){
+    try{
+      const productRef = databaseRef(database, `products/${productId}`);
+      const snapshot = await get(productRef);
+      if(snapshot.exists()){
+        return snapshot.val()
+      }       
+    }catch(error){
+      console.error(error)
+    }
+}
+
+export async function getCart(userId){
+  try{
+    const snapshot = await (get(databaseRef(database, `cart/${userId}`)));
+    if(snapshot.exists()){
+      const item = snapshot.val();
+      return Object.values(item)
+    }else{
+      return []
+    }
+  }catch(error){
+    console.error(error)
+  }
+}
+
+export async function updateCart(userId, product){
+  try{
+    const cartRef = databaseRef(database,`cart/${userId}/${product.id}`)
+    await set(cartRef, product);
+  }catch(error){
+    console.error(error)
+  }
+}
+
+export async function removeCart (userId, productId){
+  return remove (databaseRef(database, `cart/${userId}/${productId}`));
+}
+
+//검색상품
+export async function getSearchProducts(text){
+    try{
+      const dbRef = databaseRef(database, 'products')
+      const snapshot = await get(dbRef)
+      if(snapshot.exists()){
+        const data = snapshot.val();
+        const allProducts = Object.values(data);
+        // console.log(allProducts)
+
+        if(allProducts.length === 0){
+          return []
+        }
+        const matchProducts = allProducts.filter((product)=>{
+            const itemTitle = product.title;
+            // console.log(itemTitle)
+            return itemTitle.includes(text)
+        })
+        return matchProducts
+        
+      }else{
+          return []
+      }
+    }catch(error){
+      console.error(error)
+    } 
+}
+
+export {database} 
